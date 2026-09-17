@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import dotenv from 'dotenv'
 import bcrypt from 'bcryptjs'
 import rateLimit from 'express-rate-limit'
+import { Request,Response,NextFunction } from "express"
 dotenv.config()
 const app = express()
 app.use(express.json({limit:'10kb'}))
@@ -20,6 +21,19 @@ function generateToken (id:number) {
     return jwt.sign({id},process.env.JWT_SECRET!,{
         expiresIn:'30d'
     })
+}
+function middleware(req:any,res:Response,next:NextFunction) {
+    const auth = req.headers.authorization
+    if(!auth) {
+        return res.status(403).json({message:'unauthorised'})
+    } 
+    const token = auth.split(' ')[1]
+    if(!token) {
+        return res.status(403).json({message:"something went wrong"})
+    }
+    const decoded = jwt.verify(token,process.env.JWT_SECRET!) as {id:number}
+    req.user = decoded.id
+    next()
 }
 
 app.post('/register',async(req,res)=>{
@@ -68,7 +82,37 @@ app.post('/login',LoginLimitter,async(req,res)=>{
         return res.status(500).json({message:'somethign went wrong'})
     }
 })
-
+app.get('/habits',middleware,async(req:any,res)=>{
+    const user_id = req.user
+    try {
+        const habits = await pool.query('SELECT * FROM habits WHERE user_id=$1',[user_id])
+        res.json(habits.rows)
+    } catch(err) {
+        console.log(err)
+        return res.status(500).json({message:'something went wrong '})
+    }
+})
+app.post('/habits',middleware,async(req:any,res)=>{
+    try {
+        const {habit} =req.body
+        const user_id = req.user
+        const newHabit = await pool.query('INSERT INTO habits (habit,user_id) VALUES ($1,$2) RETURNING *',[habit,user_id])
+        res.json(newHabit.rows[0])
+    } catch(err) {
+        console.log(err)
+        res.status(500).json({message:'something went wrong'})
+    }
+})
+app.delete('/habits/:id',async(req,res)=>{
+    try {
+        const id = req.params.id
+        await pool.query('DELETE FROM habits WHERE id=$1 RETURNING*',[id])
+        res.json({message:'message succesfully deleted'})
+    } catch(err) {
+        console.log(err) 
+        return res.status(500).json({message:'something went wrong'})
+    }
+})
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 })
