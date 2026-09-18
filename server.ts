@@ -5,10 +5,12 @@ import dotenv from 'dotenv'
 import bcrypt from 'bcryptjs'
 import rateLimit from 'express-rate-limit'
 import type { Request,Response,NextFunction } from "express"
+import cors from 'cors'
 dotenv.config()
 const app = express()
 app.use(express.json({limit:'10kb'}))
 app.set('trust proxy', 1)
+app.use(cors())
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET is not set')
