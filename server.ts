@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 import dotenv from 'dotenv'
 import bcrypt from 'bcryptjs'
 import rateLimit from 'express-rate-limit'
-import { Request,Response,NextFunction } from "express"
+import type { Request,Response,NextFunction } from "express"
 dotenv.config()
 const app = express()
 app.use(express.json({limit:'10kb'}))
@@ -15,7 +15,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 const PORT = process.env.PORT || 5000
-const LoginLimitter = rateLimit({windowMs:15*60*100,max:10})
+const LoginLimitter = rateLimit({windowMs:15*60*1000,max:10})
 
 function generateToken (id:number) {
     return jwt.sign({id},process.env.JWT_SECRET!,{
@@ -31,9 +31,14 @@ function middleware(req:any,res:Response,next:NextFunction) {
     if(!token) {
         return res.status(403).json({message:"something went wrong"})
     }
+    try {
     const decoded = jwt.verify(token,process.env.JWT_SECRET!) as {id:number}
     req.user = decoded.id
-    next()
+    next() 
+    } catch(err) {
+        console.log(err)
+        return res.json({message:'invalid or expired token'})
+    }
 }
 
 app.post('/register',async(req,res)=>{
@@ -103,7 +108,7 @@ app.post('/habits',middleware,async(req:any,res)=>{
         res.status(500).json({message:'something went wrong'})
     }
 })
-app.delete('/habits/:id',async(req,res)=>{
+app.delete('/habits/:id',middleware,async(req,res)=>{
     try {
         const id = req.params.id
         await pool.query('DELETE FROM habits WHERE id=$1 RETURNING*',[id])
@@ -113,6 +118,7 @@ app.delete('/habits/:id',async(req,res)=>{
         return res.status(500).json({message:'something went wrong'})
     }
 })
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 })
