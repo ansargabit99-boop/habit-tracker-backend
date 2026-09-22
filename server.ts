@@ -167,6 +167,15 @@ app.delete('/habits/:id/complete',async(req,res)=>{
         console.log(err)
     }
 })
+app.get('/me',middleware,async(req:any,res)=>{
+    try {
+        const user_id = req.user
+        const me = await pool.query('SELECT id,name,gmail,number FROM users WHERE user_id=$1',[user_id])
+        res.json(me.rows[0])
+    } catch(err) {
+        console.log(err)
+    }
+})
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
