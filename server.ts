@@ -140,8 +140,8 @@ app.post('/habits/:id/complete',middleware,async(req:any,res)=>{
     try {
         const id = req.params.id
         const user_id = req.user
-        const habitCheck = await pool.query('SELECT * FROM habits WHERE id=$1 AND user_id=$1',[id,user_id])
-        if(habitCheck.rows.length){
+        const habitCheck = await pool.query('SELECT * FROM habits WHERE id=$1 AND user_id=$2',[id,user_id])
+        if(habitCheck.rows.length === 0){
             return res.status(404).json({message:'habit not found'})
         }
         const already = await pool.query('SELECT * FROM habit_completions WHERE habit_id=$1 AND completed_at=CURRENT_DATE',[id])
@@ -150,7 +150,7 @@ app.post('/habits/:id/complete',middleware,async(req:any,res)=>{
         }
         await pool.query('INSERT INTO habit_completions (habit_id,completed_at) VALUES ($1,CURRENT_DATE)',[id])
         const newStreak = await reCalculateStreak(Number(id))
-        const update = await pool.query('UPDATE habits SET streak=$1 WHERE id=$2',[newStreak,id])
+        const update = await pool.query('UPDATE habits SET streak=$1 WHERE id=$2 RETURNING streak',[newStreak,id])
         res.json(update.rows[0])
     } catch(err) {
         console.log(err)
@@ -170,7 +170,7 @@ app.delete('/habits/:id/complete',async(req,res)=>{
 app.get('/me',middleware,async(req:any,res)=>{
     try {
         const user_id = req.user
-        const me = await pool.query('SELECT id,name,gmail,number FROM users WHERE user_id=$1',[user_id])
+        const me = await pool.query('SELECT id,name,gmail,number FROM users WHERE id=$1',[user_id])
         res.json(me.rows[0])
     } catch(err) {
         console.log(err)
