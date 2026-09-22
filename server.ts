@@ -120,6 +120,53 @@ app.delete('/habits/:id',middleware,async(req,res)=>{
         return res.status(500).json({message:'something went wrong'})
     }
 })
+async function reCalculateStreak(habit_id:number) {
+    const result = await pool.query('SELECT completed_at FROM habit_completions WHERE habit_id=$1 ORDER by completed_at DESC',[habit_id])
+    const dates = result.rows.map(r=>new Date(r.completed_at).toDateString())
+    const dataSet = new Set(dates)
+    let streak = 0
+    let cursor = new Date()
+
+    if(!dataSet.has(cursor.toDateString())){
+        cursor.setDate(cursor.getDate() - 1)
+    }
+    while(dataSet.has(cursor.toDateString())) {
+        streak++
+        cursor.setDate(cursor.getDate()-1)
+    }
+    return streak
+}
+app.post('/habits/:id/complete',middleware,async(req:any,res)=>{
+    try {
+        const id = req.params.id
+        const user_id = req.user
+        const habitCheck = await pool.query('SELECT * FROM habits WHERE id=$1 AND user_id=$1',[id,user_id])
+        if(habitCheck.rows.length){
+            return res.status(404).json({message:'habit not found'})
+        }
+        const already = await pool.query('SELECT * FROM habit_completions WHERE habit_id=$1 AND completed_at=CURRENT_DATE',[id])
+        if(already.rows.length > 0){
+            return res.status(400).json({message:'already completed today'})
+        }
+        await pool.query('INSERT INTO habit_completions (habit_id,completed_at) VALUES ($1,CURRENT_DATE)',[id])
+        const newStreak = await reCalculateStreak(Number(id))
+        const update = await pool.query('UPDATE habits SET streak=$1 WHERE id=$2',[newStreak,id])
+        res.json(update.rows[0])
+    } catch(err) {
+        console.log(err)
+    }
+})
+app.delete('/habits/:id/complete',async(req,res)=>{
+    try {
+        const id =req.params.id
+        await pool.query('DELETE FROM habit_completions WHERE habit_id =$1 AND completed_at=CURRENT_DATE',[id])
+        const newStreak = await reCalculateStreak(Number(id))
+        const updated = await pool.query('UPDATE habits SET streak=$1 WHERE id=$2 RETURNING * ',[newStreak,id])
+        res.json(updated.rows[0])
+    } catch(err) {
+        console.log(err)
+    }
+})
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
